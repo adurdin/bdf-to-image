@@ -60,10 +60,11 @@ if __name__ == '__main__':
             code = jisx0208_to_shiftjis(code)
         result[code] = Image.frombytes('L', size, bytes(image))
 
-    result = OrderedDict(sorted(result.items())).items()
+    result = list(OrderedDict(sorted(result.items())).items())
     resultIter = iter(result)
     current = next(resultIter)
     first = current[0] - int(options.offset)
+    null_image = result[1][1]
     rows = ceil((next(reversed(result))[0] - first) / 16)
     image = Image.new('L', (maxSize[0] * 16, maxSize[1] * rows))
     try:
@@ -71,7 +72,13 @@ if __name__ == '__main__':
             for col in range(16):
                 index = 16 * row + col
                 if index == current[0] - first:
-                    image.paste(current[1], (maxSize[0] * col, maxSize[1] * row))
+                    # HACK: I'm converting an iso-8859-1 font which has wrong glyphs for chars <32.
+                    # So I'll use the char 1 glyph for all of those.
+                    if index<32:
+                        char_image = null_image
+                    else:
+                        char_image = current[1]
+                    image.paste(char_image, (maxSize[0] * col, maxSize[1] * row))
                     current = next(resultIter)
     except StopIteration:
         pass
