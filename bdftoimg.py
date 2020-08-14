@@ -55,7 +55,7 @@ if __name__ == '__main__':
                 else:
                     image.append(0)
                 bin = bin << 1
-        code = int(encoding, base=16)
+        code = int(encoding, base=10)
         if options.jis_to_sjis:
             code = jisx0208_to_shiftjis(code)
         result[code] = Image.frombytes('L', size, bytes(image))
