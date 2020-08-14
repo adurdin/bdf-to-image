@@ -18,15 +18,16 @@ def jisx0208_to_shiftjis(code):
         return code
 
 if __name__ == '__main__':
-    parser = OptionParser(usage="Usage: %prog <filename> <outputfile> [--jis-to-sjis]")
+    parser = OptionParser(usage="Usage: %prog <filename> <outputfile> <fontname> [--jis-to-sjis]")
     parser.add_option('--jis-to-sjis', action='store_true', dest='jis_to_sjis', default=False, help="convert encoding from JIS to SJIS")
     parser.add_option('--offset', dest='offset', default=0, help="Add character offsets to output image.")
     (options, args) = parser.parse_args()
-    if len(args) != 2:
-        sys.stderr.write("Input and output files must be specified.\n")
+    if len(args) != 3:
+        sys.stderr.write("Input and output files and font name must be specified.\n")
         sys.exit(-1)
     inputFile = args[0]
     outputFile = args[1]
+    fontname = args[2]
 
     try:
         with open(inputFile) as f:
@@ -82,4 +83,75 @@ if __name__ == '__main__':
                     current = next(resultIter)
     except StopIteration:
         pass
-    image.save(outputFile)
+
+    # HACK: output a C header instead of saving to .png
+
+    preamble = (
+        "// Dina Programming Font\n"
+        "// =====================\n"
+        "// \n"
+        "// Copyright (c) 2005-2013 Joergen Ibsen\n"
+        "// \n"
+        "// <http://www.donationcoder.com/Software/Jibz/Dina/>\n"
+        "// \n"
+        "// Permission is hereby granted, free of charge, to any person obtaining a copy\n"
+        "// of this software and associated documentation files (the \"Software\"), to deal\n"
+        "// in the Software without restriction, including without limitation the rights\n"
+        "// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n"
+        "// copies of the Software, and to permit persons to whom the Software is\n"
+        "// furnished to do so, subject to the following conditions:\n"
+        "// \n"
+        "// The above copyright notice and this permission notice shall be included in\n"
+        "// all copies or substantial portions of the Software.\n"
+        "// \n"
+        "// THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n"
+        "// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n"
+        "// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n"
+        "// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n"
+        "// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n"
+        "// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\n"
+        "// THE SOFTWARE.\n"
+        "\n"
+        )
+
+    structure = (
+        "static struct {{\n"
+        "    int bitmap_width;\n"
+        "    int bitmap_height;\n"
+        "    int bitmap_bpp;\n"
+        "    int bitmap_channels;\n"
+        "    int char_width;\n"
+        "    int char_height;\n"
+        "    unsigned char bitmap[{bitmap_size}];\n"
+        "}} {name} = {{\n"
+        "    {bitmap_width},\n"
+        "    {bitmap_height},\n"
+        "    {bitmap_bpp},\n"
+        "    {bitmap_channels},\n"
+        "    {char_width},\n"
+        "    {char_height},\n"
+        "    {{\n"
+        "{formatted_data}"
+        "    }}\n"
+        "}};\n"
+        )
+
+    name = fontname
+    bitmap_width = image.width
+    bitmap_height = image.height
+    bitmap_bpp = 8
+    bitmap_channels = 1
+    bitmap_size = (bitmap_width*bitmap_height*bitmap_bpp*bitmap_channels)//8
+    char_width = maxSize[0]
+    char_height = maxSize[1]
+
+    formatted_data = []
+    for (i, b) in enumerate(image.tobytes()):
+        if i%(image.width) == 0: formatted_data.append("    ")
+        formatted_data.append(f"{b:>3},")
+        if i%(image.width) == (image.width-1): formatted_data.append("\n")
+    formatted_data = "".join(formatted_data)
+
+    with open(outputFile, 'w') as f:
+        f.write(preamble)
+        f.write(structure.format(**locals()))
